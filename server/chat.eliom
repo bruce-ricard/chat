@@ -79,15 +79,9 @@ let () =
                         | true -> main_page ()
     ])));
 
-  Chat_app.register
+  Eliom_registration.Action.register
     ~service:chat_service
+    ~options:`NoReload
     (fun () new_message ->
-      Lwt.return
-        (Eliom_tools.F.html
-           ~title:"chat"
-           ~css:[["css";"chat.css"]]
-           Html5.F.(body [
-                        main_page ()
-                      ]
-         ))
+      Lwt.return ()
     )
