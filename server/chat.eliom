@@ -20,7 +20,7 @@ let user_one_acks, send_ack_user_one = React.E.create ()
 let user_two_acks, send_ack_user_two = React.E.create ()
 
 let current_user =
-    Eliom_reference.eref ~scope:Eliom_common.default_session_scope (None : user option)
+    Eliom_reference.eref ~scope:Eliom_common.default_process_scope (None : user option)
 
 let () =
   send_message_user_one "blah";
@@ -138,8 +138,8 @@ let () =
             Lwt.return (
             match user with
               None -> failwith "impossible"
-            | Some U1 -> send_message_user_two new_message
-            | Some U2 -> send_message_user_one new_message;
+            | Some U1 -> (print_endline (Printf.sprintf "sending %s to user2 from 1" new_message); send_message_user_two new_message)
+            | Some U2 -> (print_endline (Printf.sprintf "sending %s to user1 from 2" new_message); send_message_user_one new_message);
               )
           else
             Lwt.return ()
