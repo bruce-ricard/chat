@@ -55,7 +55,7 @@ let chat_logs messages acks =
       ] in
   let _ = [%client (
                 let dom_logs = Eliom_content.Html5.To_dom.of_element ~%logs in
-                let update = React.E.map (fun s -> dom_logs##.innerHTML := Js.string (Js.to_string (dom_logs##.innerHTML) ^ s)) ~%messages in
+                let update = React.E.map (fun s -> dom_logs##.innerHTML := Js.string (Js.to_string (dom_logs##.innerHTML) ^ "<li>" ^ s ^ "</li>")) ~%messages in
                 () : unit
               )] in
   logs
@@ -78,8 +78,14 @@ let chat_box message acks =
       chat_input ()
     ]
 
-let main_page message acks =
-  chat_box message acks
+let user_to_string = function
+    U1 -> "user1" | U2 -> "user2"
+
+let main_page user message acks =
+  div [
+      pcdata (Printf.sprintf "Welcome %s" (user_to_string user));
+      chat_box message acks
+    ]
 
 let set_current_user () =
   ignore (
@@ -94,12 +100,13 @@ let get_user_page () =
   match user with
   | None -> Lwt.return (failwith "impossible 2")
   | Some U1 -> Lwt.return (main_page
+                             U1
                              (Eliom_react.Down.of_react user_one_messages)
                              (Eliom_react.Down.of_react user_one_acks))
   | Some U2 -> Lwt.return (main_page
+                             U2
                              (Eliom_react.Down.of_react user_two_messages)
                              (Eliom_react.Down.of_react user_two_acks))
-
 
 let () =
   Chat_app.register
@@ -131,12 +138,11 @@ let () =
             Lwt.return (
             match user with
               None -> failwith "impossible"
-            | Some U1 -> (send_message_user_two new_message)
-            | Some U2 -> send_message_user_two new_message;
+            | Some U1 -> send_message_user_two new_message
+            | Some U2 -> send_message_user_one new_message;
               )
           else
             Lwt.return ()
-
     );
 
     Eliom_registration.Action.register
