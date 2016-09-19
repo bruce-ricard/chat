@@ -37,7 +37,13 @@ let chat_service =
     ~post_params:Eliom_parameter.(string "new_message")
     ()
 
-let chat_box () =
+let chat_logs () =
+  ul [
+      li [(pcdata "chat")];
+      li [(pcdata "box")]
+    ]
+
+let chat_input () =
   Form.post_form
     ~service:chat_service
     (
@@ -48,6 +54,12 @@ let chat_box () =
       ]
     )
     ()
+
+let chat_box () =
+  div [
+      chat_logs ();
+      chat_input ()
+    ]
 
 let main_page () =
   chat_box ()
