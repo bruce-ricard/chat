@@ -67,30 +67,41 @@ let chat_logs message acks =
 
 let chat_input () =
   let submit_button = Form.input ~input_type:`Submit ~value:"Send" Form.string in
-  let _ = [%client
-              (
-                let dom_button = Eliom_content.Html5.To_dom.of_element ~%submit_button in
-                Lwt.async (fun () ->
-                    Lwt_js_events.clicks
-                      dom_button
-                      (fun _ _ ->
-                        Lwt.return (sent_message_ts := Some (Unix.gettimeofday ()))
-                      )
-                  );
-                ()
-                : unit
-              )
-          ] in
-  Form.post_form
+  let form = Form.post_form
     ~service:chat_service
     (
       fun new_message ->
+      let input_text_field = Form.input ~input_type:`Text ~name:new_message Form.string in
       [
-        Form.input ~input_type:`Text ~name:new_message Form.string;
+        input_text_field;
         submit_button
       ]
     )
     ()
+  in
+  let _ = [%client
+              (
+                match Eliom_content.Html5.Manip.nth ~%form 1 with
+                  None -> ()
+                | Some node ->
+                   begin
+                     let dom_text = Eliom_content.Html5.To_dom.of_element node in
+                     let dom_button = Eliom_content.Html5.To_dom.of_element ~%submit_button in
+                     Lwt.async (fun () ->
+                         Lwt_js_events.clicks
+                           dom_button
+                           (fun _ _ ->
+                             sent_message_ts := Some (Unix.gettimeofday ());
+                             (*dom_text##value := Js.string ""; doesn't work, no method value :( *)
+                             Lwt.return ()
+                           )
+                       );
+                     ()
+                   end
+                   : unit
+              )
+          ] in
+  form
 
 let chat_box message acks =
   div [
