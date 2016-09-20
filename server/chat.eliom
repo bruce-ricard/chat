@@ -85,14 +85,15 @@ let chat_input () =
                   None -> ()
                 | Some node ->
                    begin
-                     let dom_text = Eliom_content.Html5.To_dom.of_element node in
+                     let dom_text = Eliom_content.Html5.To_dom.of_input node in
                      let dom_button = Eliom_content.Html5.To_dom.of_element ~%submit_button in
                      Lwt.async (fun () ->
                          Lwt_js_events.clicks
                            dom_button
                            (fun _ _ ->
                              sent_message_ts := Some (Unix.gettimeofday ());
-                             (*dom_text##value := Js.string ""; doesn't work, no method value :( *)
+(*                             dom_text##.value := Js.string "";
+                             dom_text##.innerHTML := Js.string "bazinga";*)
                              Lwt.return ()
                            )
                        );
