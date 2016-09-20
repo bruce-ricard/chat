@@ -105,11 +105,10 @@ let chat_input () =
                          Lwt_js_events.clicks
                            dom_button
                            (fun _ _ ->
-                             (*                             Lwt_unix.sleep 0.010;*)
                              sent_message_ts := Some (Unix.gettimeofday ());
                              let dom_logs = Eliom_content.Html5.To_dom.of_element ~%chat_logs_elt in
                              insert_my_message_in_chat_logs dom_logs (Js.to_string dom_text##.value);
-                             dom_text##.value := Js.string "";
+                             (*dom_text##.value := Js.string "";*)
                              Lwt.return ()
                            )
                        );
