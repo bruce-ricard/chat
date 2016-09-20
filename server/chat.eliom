@@ -65,7 +65,7 @@ let chat_logs message acks =
                                           match !sent_message_ts with
                                           | None -> failwith "impossible"
                                           | Some ts ->
-                                             let elapsed_time_ms = int_of_float (1000. *. (ts -. Unix.gettimeofday ())) in
+                                             let elapsed_time_ms = int_of_float (1000. *. (Unix.gettimeofday () -. ts)) in
                                              dom_logs##.innerHTML :=
                                                Js.string (Js.to_string (dom_logs##.innerHTML) ^ (Printf.sprintf "<li> me: %s (%d ms) </li>" s elapsed_time_ms)))
                                                   ~%acks in
@@ -74,16 +74,28 @@ let chat_logs message acks =
   logs
 
 let chat_input () =
+  let submit_button = Form.input ~input_type:`Submit ~value:"Send" Form.string in
+  let _ = [%client
+              (
+                let dom_button = Eliom_content.Html5.To_dom.of_element ~%submit_button in
+                Lwt.async (fun () ->
+                    Lwt_js_events.clicks
+                      dom_button
+                      (fun _ _ ->
+                        Lwt.return (sent_message_ts := Some (Unix.gettimeofday ()))
+                      )
+                  );
+                ()
+                : unit
+              )
+          ] in
   Form.post_form
     ~service:chat_service
     (
       fun new_message ->
-      let _ = [%client
-                  (sent_message_ts := Some (Unix.gettimeofday ()) : unit)
-              ] in
       [
         Form.input ~input_type:`Text ~name:new_message Form.string;
-        Form.input ~input_type:`Submit ~value:"Send" Form.string
+        submit_button
       ]
     )
     ()
@@ -154,8 +166,8 @@ let () =
             Lwt.return (
             match user with
               None -> failwith "impossible"
-            | Some U1 -> (print_endline (Printf.sprintf "sending %s to user2 from 1" new_message); send_message_user_two new_message)
-            | Some U2 -> (print_endline (Printf.sprintf "sending %s to user1 from 2" new_message); send_message_user_one new_message);
+            | Some U1 -> send_message_user_two new_message
+            | Some U2 -> send_message_user_one new_message
               )
           else
             Lwt.return ()
