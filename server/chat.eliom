@@ -53,19 +53,24 @@ let%client messages_unacked : (int, bool -> unit) Hashtbl.t = Hashtbl.create 3
 
 let chat_logs message acks =
   let _ = [%client (
-                let update_with_message = React.E.map (fun (id,msg) -> insert_their_message_in_chat_logs msg;
-                                                                       Eliom_client.call_service ~service:~%ack_service () (id,true)
-                                                      )
-                                                      ~%message in
-                let update_with_ack = React.E.map
-                                        (fun (id,ack) ->
-                                          try
-                                            (Hashtbl.find messages_unacked id) ack;
-                                            Hashtbl.remove messages_unacked id
-                                          with
-                                            Not_found -> failwith "impossible"
-                                        )
-                                        ~%acks in
+                let update_with_message =
+                  React.E.map
+                    (fun (id,msg) -> insert_their_message_in_chat_logs msg;
+                                     Eliom_client.call_service
+                                       ~service:~%ack_service
+                                       () (id,true)
+                    )
+                    ~%message in
+                let update_with_ack =
+                  React.E.map
+                    (fun (id,ack) ->
+                      try
+                        (Hashtbl.find messages_unacked id) ack;
+                        Hashtbl.remove messages_unacked id
+                      with
+                        Not_found -> failwith "impossible"
+                    )
+                    ~%acks in
                 () : unit
           )] in
   chat_logs_elt
@@ -76,13 +81,49 @@ let%client new_message_id =
 
 let%client ack_message message start_ts dom ack =
   if ack then
-    let elapsed_time_ms = int_of_float (1000. *. (Unix.gettimeofday () -. start_ts)) in
-    dom##.innerHTML := Js.string (Printf.sprintf "me: %s (%d ms)" message elapsed_time_ms)
+    let elapsed_time_ms =
+      int_of_float (1000. *. (Unix.gettimeofday () -. start_ts)) in
+    dom##.innerHTML :=
+      Js.string (Printf.sprintf "me: %s (%d ms)" message elapsed_time_ms)
   else
-    dom##.innerHTML := Js.string (Printf.sprintf "me: %s (couldn't be sent)" message)
+    dom##.innerHTML :=
+      Js.string (Printf.sprintf "me: %s (couldn't be sent)" message)
+
+let%client chat_form_handler input_text_field submit_button =
+  let dom_text = Eliom_content.Html5.To_dom.of_input input_text_field in
+  let dom_button = Eliom_content.Html5.To_dom.of_element submit_button in
+  Lwt.async (fun () ->
+      Lwt_js_events.clicks
+        dom_button
+        (fun _ _ ->
+          let message = Js.to_string dom_text##.value in
+          let message_id = new_message_id () in
+          let new_chat_line =
+            li [pcdata (Printf.sprintf "me: %s (sending...)" message)] in
+          Eliom_content.Html5.Manip.appendChild ~%chat_logs_elt new_chat_line;
+          let new_chat_dom =
+            Eliom_content.Html5.To_dom.of_element new_chat_line in
+          Hashtbl.add
+            messages_unacked
+            message_id
+            (ack_message message (Unix.gettimeofday ()) new_chat_dom);
+          ignore (
+              Eliom_client.call_service
+                ~service:~%chat_service
+                () (message_id, message)
+            );
+          dom_text##.value := Js.string "";
+          (* TODO: create a thread that sleeps 5 seconds and updates the
+             table if no ack was recieved *)
+          (* For some reason importing lwt.unix makes my server not work
+             anymore *)
+          Lwt.return ()
+        )
+    )
 
 let chat_input () =
-  let submit_button = Form.input ~input_type:`Submit ~value:"Send" Form.string in
+  let submit_button =
+    Form.input ~input_type:`Submit ~value:"Send" Form.string in
   let input_text_field = Form.input ~input_type:`Text  Form.string in
   let form =
     div [
@@ -92,27 +133,8 @@ let chat_input () =
   in
   let _ = [%client
               (
-                let dom_text = Eliom_content.Html5.To_dom.of_input ~%input_text_field in
-                let dom_button = Eliom_content.Html5.To_dom.of_element ~%submit_button in
-                Lwt.async (fun () ->
-                    Lwt_js_events.clicks
-                      dom_button
-                      (fun _ _ ->
-                        let message = Js.to_string dom_text##.value in
-                        let message_id = new_message_id () in
-                        let new_chat_line = li [pcdata (Printf.sprintf "me: %s (sending...)" message)] in
-                        Eliom_content.Html5.Manip.appendChild ~%chat_logs_elt new_chat_line;
-                        let new_chat_dom = Eliom_content.Html5.To_dom.of_element new_chat_line in
-                        Hashtbl.add messages_unacked message_id (ack_message message (Unix.gettimeofday ()) new_chat_dom);
-                        Eliom_client.call_service ~service:~%chat_service () (message_id, message);
-                        dom_text##.value := Js.string "";
-                        (* TODO: create a thread that sleeps 5 seconds and updates the table if no ack was recieved *)
-                        (* For some reason importing lwt.unix makes my server not work anymore *)
-                        Lwt.return ()
-                      )
-                  );
-                ()
-                   : unit
+                chat_form_handler ~%input_text_field ~%submit_button;
+                () : unit
               )
           ] in
   form
