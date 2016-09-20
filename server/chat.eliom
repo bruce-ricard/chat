@@ -47,6 +47,8 @@ let ack_service =
     ~post_params:Eliom_parameter.(string "message")
     ()
 
+let%client sent_message_ts = ref None
+
 let chat_logs message acks =
   let logs =
     ul [
@@ -59,7 +61,14 @@ let chat_logs message acks =
                                                                 Eliom_client.call_service ~service:~%ack_service () s
                                                       )
                                                       ~%message in
-                let update_with_ack = React.E.map (fun s ->  dom_logs##.innerHTML := Js.string (Js.to_string (dom_logs##.innerHTML) ^ "<li> me: " ^ s ^ " (received) </li>")) ~%acks in
+                let update_with_ack = React.E.map (fun s ->
+                                          match !sent_message_ts with
+                                          | None -> failwith "impossible"
+                                          | Some ts ->
+                                             let elapsed_time_ms = int_of_float (1000. *. (ts -. Unix.gettimeofday ())) in
+                                             dom_logs##.innerHTML :=
+                                               Js.string (Js.to_string (dom_logs##.innerHTML) ^ (Printf.sprintf "<li> me: %s (%d ms) </li>" s elapsed_time_ms)))
+                                                  ~%acks in
                 () : unit
           )] in
   logs
@@ -69,6 +78,9 @@ let chat_input () =
     ~service:chat_service
     (
       fun new_message ->
+      let _ = [%client
+                  (sent_message_ts := Some (Unix.gettimeofday ()) : unit)
+              ] in
       [
         Form.input ~input_type:`Text ~name:new_message Form.string;
         Form.input ~input_type:`Submit ~value:"Send" Form.string
