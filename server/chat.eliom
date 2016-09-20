@@ -33,15 +33,13 @@ let main_service =
 
 let chat_service =
   Eliom_service.App.post_coservice'
-    ~post_params:Eliom_parameter.(string "new_message")
+    ~post_params:Eliom_parameter.(int "id" ** string "new_message")
     ()
 
 let ack_service =
   Eliom_service.App.post_coservice'
-    ~post_params:Eliom_parameter.(string "message")
+    ~post_params:Eliom_parameter.(int "id" ** bool "ack")
     ()
-
-let%client sent_message_ts = ref None
 
 let chat_logs_elt =
   ul [
@@ -50,27 +48,27 @@ let chat_logs_elt =
 let%client insert_message_in_chat_logs sender dom_logs s =
   dom_logs##.innerHTML := Js.string (Js.to_string (dom_logs##.innerHTML) ^ "<li> " ^ sender ^ ": " ^ s ^ "</li>")
 
-let%client insert_my_message_in_chat_logs =
-  insert_message_in_chat_logs "me"
-
 let%client insert_their_message_in_chat_logs =
   insert_message_in_chat_logs "them"
+
+let%client messages_unacked : (int, bool -> unit) Hashtbl.t = Hashtbl.create 3
 
 let chat_logs message acks =
   let _ = [%client (
                 let dom_logs = Eliom_content.Html5.To_dom.of_element ~%chat_logs_elt in
-                let update_with_message = React.E.map (fun s -> insert_their_message_in_chat_logs dom_logs s;
-                                                                Eliom_client.call_service ~service:~%ack_service () s
+                let update_with_message = React.E.map (fun (id,msg) -> insert_their_message_in_chat_logs dom_logs msg;
+                                                                       Eliom_client.call_service ~service:~%ack_service () (id,true)
                                                       )
                                                       ~%message in
-                let update_with_ack = React.E.map (fun s ->
-                                          match !sent_message_ts with
-                                          | None -> failwith "impossible"
-                                          | Some ts ->
-                                             let elapsed_time_ms = int_of_float (1000. *. (Unix.gettimeofday () -. ts)) in
-                                             dom_logs##.innerHTML :=
-                                               Js.string (Js.to_string (dom_logs##.innerHTML) ^ (Printf.sprintf "<li> me: %s (%d ms) </li>" s elapsed_time_ms)))
-                                                  ~%acks in
+                let update_with_ack = React.E.map
+                                        (fun (id,ack) ->
+                                          try
+                                            (Hashtbl.find messages_unacked id) ack;
+                                            Hashtbl.remove messages_unacked id
+                                          with
+                                            Not_found -> failwith "impossible"
+                                        )
+                                        ~%acks in
                 () : unit
           )] in
   chat_logs_elt
@@ -79,41 +77,42 @@ let%client new_message_id =
   let id = ref 0 in
   function () -> Pervasives.incr id; !id
 
+let%client ack_message message start_ts dom ack =
+  if ack then
+    let elapsed_time_ms = int_of_float (1000. *. (Unix.gettimeofday () -. start_ts)) in
+    dom##.innerHTML := Js.string (Printf.sprintf "me:%s (%d ms)" message elapsed_time_ms)
+  else
+    dom##.innerHTML := Js.string (Printf.sprintf "me:%s (couldn't be sent)" message)
+
 let chat_input () =
   let submit_button = Form.input ~input_type:`Submit ~value:"Send" Form.string in
-  let form = Form.post_form
-    ~service:chat_service
-    (
-      fun new_message ->
-      let input_text_field = Form.input ~input_type:`Text ~name:new_message Form.string in
-      [
+  let input_text_field = Form.input ~input_type:`Text  Form.string in
+  let form =
+    div [
         input_text_field;
         submit_button
       ]
-    )
-    ()
   in
   let _ = [%client
               (
-                match Eliom_content.Html5.Manip.nth ~%form 1 with
-                  None -> ()
-                | Some node ->
-                   begin
-                     let dom_text = Eliom_content.Html5.To_dom.of_input node in
-                     let dom_button = Eliom_content.Html5.To_dom.of_element ~%submit_button in
-                     Lwt.async (fun () ->
-                         Lwt_js_events.clicks
-                           dom_button
-                           (fun _ _ ->
-                             sent_message_ts := Some (Unix.gettimeofday ());
-                             let dom_logs = Eliom_content.Html5.To_dom.of_element ~%chat_logs_elt in
-                             insert_my_message_in_chat_logs dom_logs (Js.to_string dom_text##.value);
-                             (*dom_text##.value := Js.string "";*)
-                             Lwt.return ()
-                           )
-                       );
-                     ()
-                   end
+                let dom_text = Eliom_content.Html5.To_dom.of_input ~%input_text_field in
+                let dom_button = Eliom_content.Html5.To_dom.of_element ~%submit_button in
+                let message = Js.to_string dom_text##.value in
+                Lwt.async (fun () ->
+                    Lwt_js_events.clicks
+                      dom_button
+                      (fun _ _ ->
+                        let message_id = new_message_id () in
+                        let new_chat_line = li [pcdata (Printf.sprintf "me: %s (sending...)" message)] in
+                        Eliom_content.Html5.Manip.appendChild ~%chat_logs_elt new_chat_line;
+                        let new_chat_dom = Eliom_content.Html5.To_dom.of_element new_chat_line in
+                        Hashtbl.add messages_unacked message_id (ack_message message (Unix.gettimeofday ()) new_chat_dom);
+                        Eliom_client.call_service ~service:~%chat_service () (message_id, message);
+                        dom_text##.value := Js.string "";
+                        Lwt.return ()
+                      )
+                  );
+                ()
                    : unit
               )
           ] in
