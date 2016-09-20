@@ -47,7 +47,7 @@ let ack_service =
     ~post_params:Eliom_parameter.(string "message")
     ()
 
-let chat_logs messages acks =
+let chat_logs message acks =
   let logs =
     ul [
       li [(pcdata "chat")];
@@ -55,9 +55,13 @@ let chat_logs messages acks =
       ] in
   let _ = [%client (
                 let dom_logs = Eliom_content.Html5.To_dom.of_element ~%logs in
-                let update = React.E.map (fun s -> dom_logs##.innerHTML := Js.string (Js.to_string (dom_logs##.innerHTML) ^ "<li>" ^ s ^ "</li>")) ~%messages in
+                let update_with_message = React.E.map (fun s -> dom_logs##.innerHTML := Js.string (Js.to_string (dom_logs##.innerHTML) ^ "<li> them: " ^ s ^ "</li>");
+                                                                Eliom_client.call_service ~service:~%ack_service () s
+                                                      )
+                                                      ~%message in
+                let update_with_ack = React.E.map (fun s ->  dom_logs##.innerHTML := Js.string (Js.to_string (dom_logs##.innerHTML) ^ "<li> me: " ^ s ^ " (received) </li>")) ~%acks in
                 () : unit
-              )] in
+          )] in
   logs
 
 let chat_input () =
