@@ -80,9 +80,9 @@ let%client new_message_id =
 let%client ack_message message start_ts dom ack =
   if ack then
     let elapsed_time_ms = int_of_float (1000. *. (Unix.gettimeofday () -. start_ts)) in
-    dom##.innerHTML := Js.string (Printf.sprintf "me:%s (%d ms)" message elapsed_time_ms)
+    dom##.innerHTML := Js.string (Printf.sprintf "me: %s (%d ms)" message elapsed_time_ms)
   else
-    dom##.innerHTML := Js.string (Printf.sprintf "me:%s (couldn't be sent)" message)
+    dom##.innerHTML := Js.string (Printf.sprintf "me: %s (couldn't be sent)" message)
 
 let chat_input () =
   let submit_button = Form.input ~input_type:`Submit ~value:"Send" Form.string in
@@ -97,11 +97,11 @@ let chat_input () =
               (
                 let dom_text = Eliom_content.Html5.To_dom.of_input ~%input_text_field in
                 let dom_button = Eliom_content.Html5.To_dom.of_element ~%submit_button in
-                let message = Js.to_string dom_text##.value in
                 Lwt.async (fun () ->
                     Lwt_js_events.clicks
                       dom_button
                       (fun _ _ ->
+                        let message = Js.to_string dom_text##.value in
                         let message_id = new_message_id () in
                         let new_chat_line = li [pcdata (Printf.sprintf "me: %s (sending...)" message)] in
                         Eliom_content.Html5.Manip.appendChild ~%chat_logs_elt new_chat_line;
