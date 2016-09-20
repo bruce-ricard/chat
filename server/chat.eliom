@@ -43,13 +43,17 @@ let ack_service =
 
 let%client sent_message_ts = ref None
 
+let chat_logs_elt =
+  ul [
+    ]
+
+let%client insert_message_in_chat_logs dom_logs s =
+  dom_logs##.innerHTML := Js.string (Js.to_string (dom_logs##.innerHTML) ^ "<li> them: " ^ s ^ "</li>")
+
 let chat_logs message acks =
-  let logs =
-    ul [
-      ] in
   let _ = [%client (
-                let dom_logs = Eliom_content.Html5.To_dom.of_element ~%logs in
-                let update_with_message = React.E.map (fun s -> dom_logs##.innerHTML := Js.string (Js.to_string (dom_logs##.innerHTML) ^ "<li> them: " ^ s ^ "</li>");
+                let dom_logs = Eliom_content.Html5.To_dom.of_element ~%chat_logs_elt in
+                let update_with_message = React.E.map (fun s -> insert_message_in_chat_logs dom_logs s;
                                                                 Eliom_client.call_service ~service:~%ack_service () s
                                                       )
                                                       ~%message in
@@ -63,7 +67,11 @@ let chat_logs message acks =
                                                   ~%acks in
                 () : unit
           )] in
-  logs
+  chat_logs_elt
+
+let%client new_message_id =
+  let id = ref 0 in
+  function () -> Pervasives.incr id; !id
 
 let chat_input () =
   let submit_button = Form.input ~input_type:`Submit ~value:"Send" Form.string in
@@ -92,7 +100,9 @@ let chat_input () =
                            dom_button
                            (fun _ _ ->
                              sent_message_ts := Some (Unix.gettimeofday ());
-(*                             dom_text##.value := Js.string "";
+                             let dom_logs = Eliom_content.Html5.To_dom.of_element ~%chat_logs_elt in
+                             (*                             insert_message_in_chat_logs dom_logs (Js.of_string dom_text##.value)
+                             dom_text##.value := Js.string "";
                              dom_text##.innerHTML := Js.string "bazinga";*)
                              Lwt.return ()
                            )
