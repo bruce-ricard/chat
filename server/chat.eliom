@@ -45,18 +45,15 @@ let chat_logs_elt =
   ul [
     ]
 
-let%client insert_message_in_chat_logs sender dom_logs s =
-  dom_logs##.innerHTML := Js.string (Js.to_string (dom_logs##.innerHTML) ^ "<li> " ^ sender ^ ": " ^ s ^ "</li>")
-
-let%client insert_their_message_in_chat_logs =
-  insert_message_in_chat_logs "them"
+let%client insert_their_message_in_chat_logs message =
+  let new_chat_line = li [pcdata (Printf.sprintf "them: %s" message)] in
+  Eliom_content.Html5.Manip.appendChild ~%chat_logs_elt new_chat_line
 
 let%client messages_unacked : (int, bool -> unit) Hashtbl.t = Hashtbl.create 3
 
 let chat_logs message acks =
   let _ = [%client (
-                let dom_logs = Eliom_content.Html5.To_dom.of_element ~%chat_logs_elt in
-                let update_with_message = React.E.map (fun (id,msg) -> insert_their_message_in_chat_logs dom_logs msg;
+                let update_with_message = React.E.map (fun (id,msg) -> insert_their_message_in_chat_logs msg;
                                                                        Eliom_client.call_service ~service:~%ack_service () (id,true)
                                                       )
                                                       ~%message in
@@ -109,6 +106,8 @@ let chat_input () =
                         Hashtbl.add messages_unacked message_id (ack_message message (Unix.gettimeofday ()) new_chat_dom);
                         Eliom_client.call_service ~service:~%chat_service () (message_id, message);
                         dom_text##.value := Js.string "";
+                        (* TODO: create a thread that sleeps 5 seconds and updates the table if no ack was recieved *)
+                        (* For some reason importing lwt.unix makes my server not work anymore *)
                         Lwt.return ()
                       )
                   );
