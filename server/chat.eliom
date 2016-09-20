@@ -47,13 +47,19 @@ let chat_logs_elt =
   ul [
     ]
 
-let%client insert_message_in_chat_logs dom_logs s =
-  dom_logs##.innerHTML := Js.string (Js.to_string (dom_logs##.innerHTML) ^ "<li> them: " ^ s ^ "</li>")
+let%client insert_message_in_chat_logs sender dom_logs s =
+  dom_logs##.innerHTML := Js.string (Js.to_string (dom_logs##.innerHTML) ^ "<li> " ^ sender ^ ": " ^ s ^ "</li>")
+
+let%client insert_my_message_in_chat_logs =
+  insert_message_in_chat_logs "me"
+
+let%client insert_their_message_in_chat_logs =
+  insert_message_in_chat_logs "them"
 
 let chat_logs message acks =
   let _ = [%client (
                 let dom_logs = Eliom_content.Html5.To_dom.of_element ~%chat_logs_elt in
-                let update_with_message = React.E.map (fun s -> insert_message_in_chat_logs dom_logs s;
+                let update_with_message = React.E.map (fun s -> insert_their_message_in_chat_logs dom_logs s;
                                                                 Eliom_client.call_service ~service:~%ack_service () s
                                                       )
                                                       ~%message in
@@ -99,11 +105,11 @@ let chat_input () =
                          Lwt_js_events.clicks
                            dom_button
                            (fun _ _ ->
+                             (*                             Lwt_unix.sleep 0.010;*)
                              sent_message_ts := Some (Unix.gettimeofday ());
                              let dom_logs = Eliom_content.Html5.To_dom.of_element ~%chat_logs_elt in
-                             (*                             insert_message_in_chat_logs dom_logs (Js.of_string dom_text##.value)
+                             insert_my_message_in_chat_logs dom_logs (Js.to_string dom_text##.value);
                              dom_text##.value := Js.string "";
-                             dom_text##.innerHTML := Js.string "bazinga";*)
                              Lwt.return ()
                            )
                        );
